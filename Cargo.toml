@@ -1,0 +1,12 @@
+[package]
+name = "generate_accessors"
+version = "0.1.0"
+edition = "2021"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+syn = { version = "1.0.101", features = ["parsing", "proc-macro", "extra-traits", "full"] }
+quote = "1.0.21"
+proc-macro2 = "1.0.24"
