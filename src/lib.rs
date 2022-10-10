@@ -130,9 +130,7 @@ impl<T: Clone> ForEachAccessorIdent<T> {
   }
 }
 
-fn str_to_token_stream(str: &str) -> TokenStream {
-  TokenStream::from_str(str).unwrap()
-}
+// TODO: format_tokens macro??
 
 #[proc_macro]
 pub fn generate_accessors(tokens: proc_macro::TokenStream) -> proc_macro::TokenStream {
@@ -140,14 +138,14 @@ pub fn generate_accessors(tokens: proc_macro::TokenStream) -> proc_macro::TokenS
   let mut output = TokenStream::new();
 
   let def_suffixes: ForEachAccessorIdent<TokenStream> = ForEachAccessorIdent{ 
-    take: str_to_token_stream("take_"),
-    set: str_to_token_stream("set_"),
-    chain_set: str_to_token_stream("set_"),
-    replace: str_to_token_stream("replace_"),
+    take: TokenStream::from_str("take_").unwrap(),
+    set: TokenStream::from_str("set_").unwrap(),
+    chain_set: TokenStream::from_str("set_").unwrap(),
+    replace: TokenStream::from_str("replace_").unwrap(),
     ..ForEachAccessorIdent::new_with(TokenStream::new())
   };
   let def_postfixes: ForEachAccessorIdent<TokenStream> = ForEachAccessorIdent{ 
-    get_mut: str_to_token_stream("_mut"),
+    get_mut: TokenStream::from_str("_mut").unwrap(),
     ..ForEachAccessorIdent::new_with(TokenStream::new())
   };
 
