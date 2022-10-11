@@ -1,5 +1,6 @@
 #![allow(unused, unused_variables)]
 
+use crate::gen_accessors_attr::*;
 use ::std::borrow::Borrow;
 use ::std::fmt::{Debug, Display};
 use ::std::fmt;
@@ -11,6 +12,24 @@ use ::syn::parse::{Parse, ParseStream, Parser};
 use ::syn::punctuated::Punctuated;
 use ::syn::spanned::Spanned;
 use ::syn::token::{Brace, Bracket};
+
+#[derive(Debug)]
+pub struct AccessorsExpr {
+  pub attrs: Vec<GenAccessorsAttr>,
+  pub expr: ExprType,
+}
+
+impl Parse for AccessorsExpr {
+  fn parse(input: ParseStream) -> Result<Self, syn::Error>  {
+    let mut attrs = Vec::new();
+    while input.peek(Token![#]) {
+      attrs.push(input.parse()?);
+    }
+    let expr = input.parse()?;
+
+    Ok(AccessorsExpr { attrs, expr, })
+  }
+}
 
 #[derive(Debug, Clone)]
 pub enum AccessorIdent {
@@ -50,5 +69,26 @@ impl Parse for AccessorIdent {
       "replace"   => Ok(Self::Replace { span: ident.span() }),
       _ => Err(syn::Error::new(input.span(), "unrecognized ident")),
     };
+  }
+}
+
+#[derive(Debug)]
+pub struct Accessor {
+  pub vis: Visibility,
+  pub constness: Option<Token![const]>,
+  pub asyncness: Option<Token![async]>,
+  pub unsafety: Option<Token![unsafe]>,
+  pub ty: AccessorIdent,
+}
+
+impl Parse for Accessor {
+  fn parse(input: ParseStream) -> Result<Self, syn::Error>  {
+    Ok(Accessor { 
+      vis: input.parse()?,
+      constness: input.parse().ok(),
+      asyncness: input.parse().ok(),
+      unsafety: input.parse().ok(),
+      ty: input.parse()?
+    })
   }
 }
