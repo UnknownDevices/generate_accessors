@@ -171,11 +171,12 @@ pub fn generate_accessors(tokens: proc_macro::TokenStream) -> proc_macro::TokenS
   for item in input.items {
     let mut member_name = Option::<TokenStream>::None;
     let mut method_receiver = Option::<TokenStream>::None;
+    let mut from_cast = Option::<TokenStream>::None;
     let mut method_attrs = TokenStream::new();
     let mut suffixes = def_suffixes.clone();
     let mut postfixes = def_postfixes.clone();
     for attr in &item.attrs {
-      attr.unpack_into(&mut member_name, &mut method_receiver, 
+      attr.unpack_into(&mut member_name, &mut method_receiver, &mut from_cast,
         &mut method_attrs, &mut suffixes, &mut postfixes);
     }
 
@@ -183,11 +184,12 @@ pub fn generate_accessors(tokens: proc_macro::TokenStream) -> proc_macro::TokenS
       for expr in item.exprs.iter() {
         let mut member_name = member_name.clone();
         let mut method_receiver = method_receiver.clone();
+        let mut into_cast = from_cast.clone();
         let mut method_attrs = method_attrs.clone();
         let mut suffixes = suffixes.clone();
         let mut postfixes = postfixes.clone();
         for attr in &expr.attrs {
-          attr.unpack_into(&mut member_name, &mut method_receiver,
+          attr.unpack_into(&mut member_name, &mut method_receiver, &mut into_cast,
             &mut method_attrs,  &mut suffixes, &mut postfixes);
         }
 
@@ -199,11 +201,11 @@ pub fn generate_accessors(tokens: proc_macro::TokenStream) -> proc_macro::TokenS
             Visibility::Inherited => item.accessors_vis.to_token_stream(),
             _ => accessor.vis.to_token_stream(),
           };
-          let constness = accessor.constness.map_or(item.accessors_constness.map_or(
+          let constness = accessor.constness.map_or_else(|| item.accessors_constness.map_or(
             TokenStream::new(), |some| some.into_token_stream()), |some| some.into_token_stream());
-          let asyncness = accessor.asyncness.map_or(item.accessors_asyncness.map_or(
+          let asyncness = accessor.asyncness.map_or_else(|| item.accessors_asyncness.map_or(
             TokenStream::new(), |some| some.into_token_stream()), |some| some.into_token_stream());
-          let unsafety = accessor.unsafety.map_or(item.accessors_unsafety.map_or(
+          let unsafety = accessor.unsafety.map_or_else(|| item.accessors_unsafety.map_or(
             TokenStream::new(), |some| some.into_token_stream()), |some| some.into_token_stream());
 
           quote!(#vis #constness #asyncness #unsafety)
@@ -213,79 +215,100 @@ pub fn generate_accessors(tokens: proc_macro::TokenStream) -> proc_macro::TokenS
         let method_args: TokenStream;
         let method_ret_ty: TokenStream;
         let method_expr: TokenStream;
-        let expr_ty = &expr.ty;
-        let expr_expr = &expr.expr;
+        let do_into_cast = into_cast.is_some();
+        let expr_ty = into_cast.unwrap_or_else(|| expr.ty.to_token_stream());
+        let expr_expr = expr.expr.to_token_stream();
         match accessor.ty {
           AccessorIdent::Get { .. } => {
             method_ident = TokenStream::from_str(format!("{}{}{}", 
               suffixes.get.to_string(), member_name.to_string(),
               postfixes.get.to_string()).as_str()).unwrap();            
-            method_args = method_receiver.unwrap_or(quote!(&mut self));
-            method_ret_ty = quote!(&#expr_ty);
-            method_expr = quote!(&#expr_expr);
+            method_args = method_receiver.unwrap_or_else(|| quote!(&mut self));
+            method_ret_ty = quote!(&mut #expr_ty);
+            method_expr = if do_into_cast { 
+              quote!(&#expr_expr) 
+            } else { quote!((&#expr_expr).into()) };
           },
           AccessorIdent::GetMut { .. } => {
             method_ident = TokenStream::from_str(format!("{}{}{}", 
               suffixes.get_mut.to_string(), member_name.to_string(),
               postfixes.get_mut.to_string()).as_str()).unwrap();
-            method_args = method_receiver.unwrap_or(quote!(&mut self));
+            method_args = method_receiver.unwrap_or_else(|| quote!(&mut self));
             method_ret_ty = quote!(&mut #expr_ty);
-            method_expr = quote!(&mut #expr_expr);
+            method_expr = if do_into_cast { 
+              quote!((&mut #expr_expr).into()) 
+            } else { quote!(&mut #expr_expr) };
           },
           AccessorIdent::GetCopy { .. } => {
             method_ident = TokenStream::from_str(format!("{}{}{}", 
               suffixes.get_copy.to_string(), member_name.to_string(),
               postfixes.get_copy.to_string()).as_str()).unwrap();
-            method_args = method_receiver.unwrap_or(quote!(&self));
+            method_args = method_receiver.unwrap_or_else(|| quote!(&self));
             method_ret_ty = quote!(#expr_ty);
-            method_expr = quote!(#expr_expr.clone());
+            method_expr = if do_into_cast { 
+              quote!((#expr_expr.clone()).into()) 
+            } else { quote!(#expr_expr.clone()) };
           },
           AccessorIdent::Take { .. } => {
             method_ident = TokenStream::from_str(format!("{}{}{}", 
               suffixes.take.to_string(), member_name.to_string(),
               postfixes.take.to_string()).as_str()).unwrap();
-            method_args = method_receiver.unwrap_or(quote!(&mut self));
+            method_args = method_receiver.unwrap_or_else(|| quote!(&mut self));
             method_ret_ty = quote!(#expr_ty);
-            method_expr = quote!(#expr_expr);
+            method_expr = if do_into_cast { 
+              quote!((#expr_expr).into()) 
+            } else { quote!(#expr_expr) };
           },
           AccessorIdent::Set { .. } => {
             method_ident = TokenStream::from_str(format!("{}{}{}", 
               suffixes.set.to_string(), member_name.to_string(),
               postfixes.set.to_string()).as_str()).unwrap();
-            method_args = method_receiver.unwrap_or(quote!(&mut self));
+              method_args = method_receiver.map_or_else(|| quote!(&mut self, value: #expr_ty), 
+                |some| if some.is_empty() { 
+                  quote!(value: #expr_ty) 
+                } else { quote!(#some, value: #expr_ty) });
             method_ret_ty = quote!(());
-            method_expr = quote!(#expr_expr = value;);
+            method_expr = if do_into_cast { 
+              quote!(#expr_expr = value.into();) 
+            } else { quote!(#expr_expr = value;)};
           },
           AccessorIdent::ChainSet { .. } => {
             method_ident = TokenStream::from_str(format!("{}{}{}", 
               suffixes.chain_set.to_string(), member_name.to_string(),
               postfixes.chain_set.to_string()).as_str()).unwrap();
-            method_args = method_receiver.map_or(quote!(&mut self, value: #expr_ty), |some| 
-              if some.is_empty() { quote!(value: #expr_ty) } 
-              else { quote!(#some, value: #expr_ty) } 
-            );
+            method_args = method_receiver.map_or_else(|| quote!(&mut self, value: #expr_ty), 
+              |some| if some.is_empty() { 
+                quote!(value: #expr_ty) 
+              } else { quote!(#some, value: #expr_ty) });
             method_ret_ty = quote!(&mut Self);
-            method_expr = quote!(
-              #expr_expr = value;
-              self
-            );
+            method_expr = if do_into_cast {
+              quote!(#expr_expr = value.into(); self)
+            } else { quote!(#expr_expr = value; self) };
           },
           AccessorIdent::Replace { .. } => {
             method_ident = TokenStream::from_str(format!("{}{}{}", 
               suffixes.replace.to_string(), member_name.to_string(),
               postfixes.replace.to_string()).as_str()).unwrap();
-            method_args = method_receiver.map_or(quote!(&mut self, value: #expr_ty), |some| 
-              if some.is_empty() { quote!(value: #expr_ty) } 
-              else { quote!(#some, value: #expr_ty) } 
+            method_args = method_receiver.map_or_else(|| quote!(&mut self, value: #expr_ty), 
+              |some| if some.is_empty() { 
+                quote!(value: #expr_ty) 
+              } else { quote!(#some, value: #expr_ty) } 
             );
             method_ret_ty = quote!(#expr_ty);
-            method_expr = quote!(
-              let output = #expr_expr;
-              #expr_expr = value;
-              output
-            );
+            method_expr = if do_into_cast { 
+              quote!(
+                let output = #expr_expr;
+                #expr_expr = value.into(); 
+                output.into()) 
+            } else { 
+              quote!(
+                let output = #expr_expr;
+                #expr_expr = value;
+                output) 
+            };
           },
         };
+        
         output.extend(quote!(
           #method_attrs
           #method_modifiers fn #method_ident (#method_args) -> #method_ret_ty {

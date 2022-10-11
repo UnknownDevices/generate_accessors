@@ -21,6 +21,7 @@ use crate::ForEachAccessorIdent;
 pub enum GenAccessorsAttrIdent {
   Name            { span: Span },
   Receiver        { span: Span },
+  Into            { span: Span },
   Attrs           { span: Span },
   GetSuffix       { span: Span },
   GetPostfix      { span: Span },
@@ -43,6 +44,7 @@ impl Display for GenAccessorsAttrIdent {
     return match self {
       Self::Name { .. }            => f.write_str("name"),
       Self::Receiver { .. }        => f.write_str("receiver"),
+      Self::Into { .. }            => f.write_str("into"),
       Self::Attrs { .. }           => f.write_str("attrs"),
       Self::GetSuffix { .. }       => f.write_str("get_suffix"),
       Self::GetPostfix { .. }      => f.write_str("get_postfix"),
@@ -68,6 +70,7 @@ impl Parse for GenAccessorsAttrIdent {
     return match ident.to_string().as_str() {
       "name"              => Ok(Self::Name { span: ident.span() }),
       "receiver"          => Ok(Self::Receiver { span: ident.span() }),
+      "into"              => Ok(Self::Into { span: ident.span() }),
       "attrs"             => Ok(Self::Attrs { span: ident.span() }),
       "get_suffix"        => Ok(Self::GetSuffix { span: ident.span() }),
       "get_postfix"       => Ok(Self::GetPostfix { span: ident.span() }),
@@ -84,8 +87,7 @@ impl Parse for GenAccessorsAttrIdent {
       "replace_suffix"    => Ok(Self::ReplaceSuffix { span: ident.span() }),
       "replace_postfix"   => Ok(Self::ReplacePostfix { span: ident.span() }),
       _ => Err(syn::Error::new(ident.span(), 
-        format!("attribute `{ident}` not recognized in this context, \
-        to attach an attribute to the generated methods see the attribute `attrs`"))),
+        format!("attribute `{ident}` not recognized in the context of this macro"))),
     };
   }
 }
@@ -120,14 +122,16 @@ impl Parse for GenAccessorsAttr {
 }
 
 impl GenAccessorsAttr {
-  pub(crate) fn unpack_into(&self, 
-    name: &mut Option<TokenStream>, receiver: &mut Option<TokenStream>, attrs: &mut TokenStream, 
+  pub(crate) fn unpack_into(&self, name: &mut Option<TokenStream>, 
+    receiver: &mut Option<TokenStream>, into_cast: &mut Option<TokenStream>, 
+    attrs: &mut TokenStream, 
     suffixes: &mut ForEachAccessorIdent<TokenStream>, 
     postfixes: &mut ForEachAccessorIdent<TokenStream>)
   {
     match &self.ident {
       GenAccessorsAttrIdent::Name            { .. } => *name = Some(self.arg.clone()),
       GenAccessorsAttrIdent::Receiver        { .. } => *receiver = Some(self.arg.clone()),
+      GenAccessorsAttrIdent::Into            { .. } => *into_cast = Some(self.arg.clone()),
       GenAccessorsAttrIdent::Attrs           { .. } => *attrs = self.arg.clone(),
       GenAccessorsAttrIdent::GetSuffix       { .. } => suffixes.get = self.arg.clone(),
       GenAccessorsAttrIdent::GetPostfix      { .. } => postfixes.get = self.arg.clone(),
