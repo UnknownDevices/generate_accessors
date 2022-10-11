@@ -7,6 +7,8 @@ use ::std::fmt;
 use ::std::str::FromStr;
 use ::proc_macro2::{Span, TokenStream};
 use ::quote::{quote, format_ident, ToTokens};
+use syn::Type;
+use syn::token::Colon;
 use ::syn::{Attribute, NestedMeta, AttributeArgs, parse2, Receiver, parse_macro_input, bracketed, braced, Token, Expr, Member, Visibility, ExprType, Ident};
 use ::syn::parse::{Parse, ParseStream, Parser};
 use ::syn::punctuated::Punctuated;
@@ -16,7 +18,9 @@ use ::syn::token::{Brace, Bracket};
 #[derive(Debug)]
 pub struct AccessorsExpr {
   pub attrs: Vec<GenAccessorsAttr>,
-  pub expr: ExprType,
+  pub expr: Box<Expr>,
+  pub colon_token: Colon,
+  pub ty: Box<Type>,
 }
 
 impl Parse for AccessorsExpr {
@@ -25,9 +29,12 @@ impl Parse for AccessorsExpr {
     while input.peek(Token![#]) {
       attrs.push(input.parse()?);
     }
-    let expr = input.parse()?;
+    let expr_type = input.parse::<ExprType>()?;
+    let expr = expr_type.expr;
+    let colon_token = expr_type.colon_token;
+    let ty = expr_type.ty;
 
-    Ok(AccessorsExpr { attrs, expr, })
+    Ok(AccessorsExpr { attrs, expr, colon_token, ty, })
   }
 }
 

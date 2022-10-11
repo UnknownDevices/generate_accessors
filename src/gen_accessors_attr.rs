@@ -20,6 +20,7 @@ use crate::ForEachAccessorIdent;
 #[derive(Debug, Clone)]
 pub enum GenAccessorsAttrIdent {
   Name            { span: Span },
+  Receiver        { span: Span },
   Attrs           { span: Span },
   GetSuffix       { span: Span },
   GetPostfix      { span: Span },
@@ -41,6 +42,7 @@ impl Display for GenAccessorsAttrIdent {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     return match self {
       Self::Name { .. }            => f.write_str("name"),
+      Self::Receiver { .. }        => f.write_str("receiver"),
       Self::Attrs { .. }           => f.write_str("attrs"),
       Self::GetSuffix { .. }       => f.write_str("get_suffix"),
       Self::GetPostfix { .. }      => f.write_str("get_postfix"),
@@ -65,6 +67,7 @@ impl Parse for GenAccessorsAttrIdent {
     let ident = Ident::parse(input)?;
     return match ident.to_string().as_str() {
       "name"              => Ok(Self::Name { span: ident.span() }),
+      "receiver"          => Ok(Self::Receiver { span: ident.span() }),
       "attrs"             => Ok(Self::Attrs { span: ident.span() }),
       "get_suffix"        => Ok(Self::GetSuffix { span: ident.span() }),
       "get_postfix"       => Ok(Self::GetPostfix { span: ident.span() }),
@@ -103,9 +106,6 @@ impl Parse for GenAccessorsAttr {
     let ident = brackets_content.parse::<GenAccessorsAttrIdent>()?;
     let paren_token = parenthesized!(paren_content in brackets_content);
     let arg = paren_content.parse::<TokenStream>()?;
-    if let GenAccessorsAttrIdent::Name { .. } = ident {
-      assert!(!arg.is_empty(), "argument to name attribute cannot be empty");
-    }
 
     Ok(GenAccessorsAttr { 
       pound_token,
@@ -118,12 +118,14 @@ impl Parse for GenAccessorsAttr {
 }
 
 impl GenAccessorsAttr {
-  pub(crate) fn unpack_into(&self, name: &mut TokenStream, attrs: &mut TokenStream,
+  pub(crate) fn unpack_into(&self, 
+    name: &mut Option<TokenStream>, receiver: &mut Option<TokenStream>, attrs: &mut TokenStream, 
     suffixes: &mut ForEachAccessorIdent<TokenStream>, 
     postfixes: &mut ForEachAccessorIdent<TokenStream>)
   {
     match &self.ident {
-      GenAccessorsAttrIdent::Name            { .. } => *name = self.arg.clone(),
+      GenAccessorsAttrIdent::Name            { .. } => *name = Some(self.arg.clone()),
+      GenAccessorsAttrIdent::Receiver        { .. } => *receiver = Some(self.arg.clone()),
       GenAccessorsAttrIdent::Attrs           { .. } => *attrs = self.arg.clone(),
       GenAccessorsAttrIdent::GetSuffix       { .. } => suffixes.get = self.arg.clone(),
       GenAccessorsAttrIdent::GetPostfix      { .. } => postfixes.get = self.arg.clone(),

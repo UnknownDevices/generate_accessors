@@ -4,6 +4,7 @@ mod gen_accessors_attr;
 mod accessors;
 use accessors::*;
 use gen_accessors_attr::{GenAccessorsAttr, GenAccessorsAttrIdent};
+use syn::{Block, Stmt};
 use syn::parse::ParseBuffer;
 use ::std::borrow::Borrow;
 use ::std::fmt::{Debug, Display};
@@ -108,6 +109,50 @@ impl Parse for ItemGenAccessors {
   }
 }
 
+fn deduce_member_name(expr: &Expr) -> TokenStream {
+  return match expr.borrow() {
+    Expr::Field(expr_field) => {
+      match &expr_field.member {
+        Member::Named(member_named) => member_named.to_token_stream().into(),
+        Member::Unnamed(_) => panic!(),
+      }
+    },
+    Expr::Path(expr_path) => {
+      expr_path.path.segments.last().unwrap().ident.to_token_stream()
+    },
+    Expr::MethodCall(expr_method_call) => {
+      expr_method_call.method.to_token_stream()
+    },
+    Expr::Try(expr_try) => {
+      deduce_member_name(expr_try.expr.borrow())
+    },
+    Expr::Call(expr_call) => {
+      deduce_member_name(expr_call.func.borrow())
+    },
+    Expr::Unary(expr_unary) => {
+      deduce_member_name(expr_unary.expr.borrow())
+    },
+    Expr::Cast(expr_cast) => {
+      deduce_member_name(expr_cast.expr.borrow())
+    },
+    Expr::Reference(expr_reference) => {
+      deduce_member_name(expr_reference.expr.borrow())
+    },
+    Expr::Box(expr_box) => {
+      deduce_member_name(expr_box.expr.borrow())
+    },
+    Expr::Binary(expr_binary) => {
+      deduce_member_name(expr_binary.left.borrow())
+    },
+    Expr::Paren(expr_paren) => {
+      deduce_member_name(expr_paren.expr.borrow())
+    }
+    _ => panic!(),
+  }
+}
+
+// first get all overrides then deduce if not overriden at all
+// struct AttrOverrides or GenAccessorsAttr to tuple enum
 #[proc_macro]
 pub fn generate_accessors(tokens: proc_macro::TokenStream) -> proc_macro::TokenStream {
   let input = parse_macro_input!(tokens as ItemGenAccessors);
@@ -126,35 +171,30 @@ pub fn generate_accessors(tokens: proc_macro::TokenStream) -> proc_macro::TokenS
   };
 
   for item in input.items {
-    let mut member_name = TokenStream::new();
+    let mut member_name = Option::<TokenStream>::None;
+    let mut method_receiver = Option::<TokenStream>::None;
     let mut method_attrs = TokenStream::new();
     let mut suffixes = def_suffixes.clone();
     let mut postfixes = def_postfixes.clone();
     for attr in &item.attrs {
-      attr.unpack_into(&mut member_name, &mut method_attrs, &mut suffixes, &mut postfixes);
+      attr.unpack_into(&mut member_name, &mut method_receiver, 
+        &mut method_attrs, &mut suffixes, &mut postfixes);
     }
 
     for accessor in item.accessors.iter() {
       for expr in item.exprs.iter() {
-        let mut name = member_name.clone();
+        let mut member_name = member_name.clone();
+        let mut method_receiver = method_receiver.clone();
         let mut method_attrs = method_attrs.clone();
         let mut suffixes = suffixes.clone();
         let mut postfixes = postfixes.clone();
         for attr in &expr.attrs {
-          attr.unpack_into(&mut name, &mut method_attrs, &mut suffixes, &mut postfixes);
+          attr.unpack_into(&mut member_name, &mut method_receiver,
+            &mut method_attrs,  &mut suffixes, &mut postfixes);
         }
 
-        let name = if name.is_empty() {
-          match expr.expr.expr.borrow() {
-            Expr::Field(expr_field) => {
-              match &expr_field.member {
-                Member::Named(member_named) => member_named.to_token_stream().into(),
-                Member::Unnamed(_) => panic!(),
-              }
-            },
-            _ => panic!(),
-          }
-        } else { name };
+        let member_name = member_name.map_or_else(|| deduce_member_name(&expr.expr), 
+          |some| some.into_token_stream());
 
         let method_modifiers = {
           let vis = match accessor.vis {
@@ -175,54 +215,57 @@ pub fn generate_accessors(tokens: proc_macro::TokenStream) -> proc_macro::TokenS
         let method_args: TokenStream;
         let method_ret_ty: TokenStream;
         let method_expr: TokenStream;
-        let expr_ty = &expr.expr.ty;
-        let expr_expr = &expr.expr.expr;
+        let expr_ty = &expr.ty;
+        let expr_expr = &expr.expr;
         match accessor.ty {
           AccessorIdent::Get { .. } => {
             method_ident = TokenStream::from_str(format!("{}{}{}", 
-              suffixes.get.to_string(), name.to_string(),
-              postfixes.get.to_string()).as_str()).unwrap();
-            method_args = quote!(&self);
+              suffixes.get.to_string(), member_name.to_string(),
+              postfixes.get.to_string()).as_str()).unwrap();            
+            method_args = method_receiver.unwrap_or(quote!(&mut self));
             method_ret_ty = quote!(&#expr_ty);
             method_expr = quote!(&#expr_expr);
           },
           AccessorIdent::GetMut { .. } => {
             method_ident = TokenStream::from_str(format!("{}{}{}", 
-              suffixes.get_mut.to_string(), name.to_string(),
+              suffixes.get_mut.to_string(), member_name.to_string(),
               postfixes.get_mut.to_string()).as_str()).unwrap();
-            method_args = quote!(&mut self);
+            method_args = method_receiver.unwrap_or(quote!(&mut self));
             method_ret_ty = quote!(&mut #expr_ty);
             method_expr = quote!(&mut #expr_expr);
           },
           AccessorIdent::GetCopy { .. } => {
             method_ident = TokenStream::from_str(format!("{}{}{}", 
-              suffixes.get_copy.to_string(), name.to_string(),
+              suffixes.get_copy.to_string(), member_name.to_string(),
               postfixes.get_copy.to_string()).as_str()).unwrap();
-            method_args = quote!(&self);
+            method_args = method_receiver.unwrap_or(quote!(&self));
             method_ret_ty = quote!(#expr_ty);
             method_expr = quote!(#expr_expr.clone());
           },
           AccessorIdent::Take { .. } => {
             method_ident = TokenStream::from_str(format!("{}{}{}", 
-              suffixes.take.to_string(), name.to_string(),
+              suffixes.take.to_string(), member_name.to_string(),
               postfixes.take.to_string()).as_str()).unwrap();
-            method_args = quote!(&mut self);
+            method_args = method_receiver.unwrap_or(quote!(&mut self));
             method_ret_ty = quote!(#expr_ty);
             method_expr = quote!(#expr_expr);
           },
           AccessorIdent::Set { .. } => {
             method_ident = TokenStream::from_str(format!("{}{}{}", 
-              suffixes.set.to_string(), name.to_string(),
+              suffixes.set.to_string(), member_name.to_string(),
               postfixes.set.to_string()).as_str()).unwrap();
-            method_args = quote!(&mut self, value: #expr_ty);
+            method_args = method_receiver.unwrap_or(quote!(&mut self));
             method_ret_ty = quote!(());
             method_expr = quote!(#expr_expr = value;);
           },
           AccessorIdent::ChainSet { .. } => {
             method_ident = TokenStream::from_str(format!("{}{}{}", 
-              suffixes.chain_set.to_string(), name.to_string(),
+              suffixes.chain_set.to_string(), member_name.to_string(),
               postfixes.chain_set.to_string()).as_str()).unwrap();
-            method_args = quote!(&mut self, value: #expr_ty);
+            method_args = method_receiver.map_or(quote!(&mut self, value: #expr_ty), |some| 
+              if some.is_empty() { quote!(value: #expr_ty) } 
+              else { quote!(#some, value: #expr_ty) } 
+            );
             method_ret_ty = quote!(&mut Self);
             method_expr = quote!(
               #expr_expr = value;
@@ -231,9 +274,12 @@ pub fn generate_accessors(tokens: proc_macro::TokenStream) -> proc_macro::TokenS
           },
           AccessorIdent::Replace { .. } => {
             method_ident = TokenStream::from_str(format!("{}{}{}", 
-              suffixes.replace.to_string(), name.to_string(),
+              suffixes.replace.to_string(), member_name.to_string(),
               postfixes.replace.to_string()).as_str()).unwrap();
-            method_args = quote!(&mut self, value: #expr_ty);
+            method_args = method_receiver.map_or(quote!(&mut self, value: #expr_ty), |some| 
+              if some.is_empty() { quote!(value: #expr_ty) } 
+              else { quote!(#some, value: #expr_ty) } 
+            );
             method_ret_ty = quote!(#expr_ty);
             method_expr = quote!(
               let output = #expr_expr;
@@ -242,7 +288,6 @@ pub fn generate_accessors(tokens: proc_macro::TokenStream) -> proc_macro::TokenS
             );
           },
         };
-
         output.extend(quote!(
           #method_attrs
           #method_modifiers fn #method_ident (#method_args) -> #method_ret_ty {
