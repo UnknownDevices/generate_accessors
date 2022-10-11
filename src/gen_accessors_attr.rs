@@ -83,7 +83,9 @@ impl Parse for GenAccessorsAttrIdent {
       "chain_set_postfix" => Ok(Self::ChainSetPostfix { span: ident.span() }),
       "replace_suffix"    => Ok(Self::ReplaceSuffix { span: ident.span() }),
       "replace_postfix"   => Ok(Self::ReplacePostfix { span: ident.span() }),
-      _ => Err(syn::Error::new(input.span(), "unrecognized ident")),
+      _ => Err(syn::Error::new(ident.span(), 
+        format!("attribute `{ident}` not recognized in this context, \
+        to attach an attribute to the generated methods see the attribute `attrs`"))),
     };
   }
 }

@@ -4,7 +4,8 @@ mod gen_accessors_attr;
 mod accessors;
 use accessors::*;
 use gen_accessors_attr::{GenAccessorsAttr, GenAccessorsAttrIdent};
-use syn::{Block, Stmt};
+use syn::token::Colon;
+use syn::{Block, Stmt, Type};
 use syn::parse::ParseBuffer;
 use ::std::borrow::Borrow;
 use ::std::fmt::{Debug, Display};
@@ -18,44 +19,41 @@ use ::syn::punctuated::Punctuated;
 use ::syn::spanned::Spanned;
 use ::syn::token::{Brace, Bracket};
 
-// TODO: potential proc macro work?
-#[derive(Default, Debug, Clone)]
-struct ForEachAccessorIdent<T> {
-  pub get: T,
-  pub get_mut: T,
-  pub get_copy: T,
-  pub take: T,
-  pub set: T,
-  pub chain_set: T,
-  pub replace: T,
+#[derive(Debug)]
+struct GenAccessorsExpr {
+  pub attrs: Vec<GenAccessorsAttr>,
+  pub expr: Box<Expr>,
+  pub colon_token: Colon,
+  pub ty: Box<Type>,
 }
 
-impl<T: Clone> ForEachAccessorIdent<T> {
-  pub fn new_with(value: T) -> Self {
-    Self {
-      get: value.clone(),
-      get_mut: value.clone(),
-      get_copy: value.clone(),
-      take: value.clone(),
-      set: value.clone(),
-      chain_set: value.clone(),
-      replace: value.clone(),
+impl Parse for GenAccessorsExpr {
+  fn parse(input: ParseStream) -> Result<Self, syn::Error>  {
+    let mut attrs = Vec::new();
+    while input.peek(Token![#]) {
+      attrs.push(input.parse()?);
     }
+    let expr_type = input.parse::<ExprType>()?;
+    let expr = expr_type.expr;
+    let colon_token = expr_type.colon_token;
+    let ty = expr_type.ty;
+
+    Ok(GenAccessorsExpr { attrs, expr, colon_token, ty, })
   }
 }
 
 #[derive(Debug)]
 struct GenAccessorsItem {
-  attrs: Vec<GenAccessorsAttr>,
-  accessors_vis: Visibility,
-  accessors_constness: Option<Token![const]>,
-  accessors_asyncness: Option<Token![async]>,
-  accessors_unsafety: Option<Token![unsafe]>,
-  bracket_token: Bracket,
-  accessors: Punctuated<Accessor, Token![,]>,
-  for_token: Token![for],
-  brace_token: Brace,
-  exprs: Punctuated<AccessorsExpr, Token![,]>,
+  pub attrs: Vec<GenAccessorsAttr>,
+  pub accessors_vis: Visibility,
+  pub accessors_constness: Option<Token![const]>,
+  pub accessors_asyncness: Option<Token![async]>,
+  pub accessors_unsafety: Option<Token![unsafe]>,
+  pub bracket_token: Bracket,
+  pub accessors: Punctuated<Accessor, Token![,]>,
+  pub for_token: Token![for],
+  pub brace_token: Brace,
+  pub exprs: Punctuated<GenAccessorsExpr, Token![,]>,
 }
 
 impl Parse for GenAccessorsItem {
@@ -75,7 +73,7 @@ impl Parse for GenAccessorsItem {
     let accessors = brackets_content.parse_terminated(Accessor::parse)?;
     let for_token = input.parse()?;
     let brace_token = braced!(braces_content in input);
-    let exprs = braces_content.parse_terminated(AccessorsExpr::parse)?;
+    let exprs = braces_content.parse_terminated(GenAccessorsExpr::parse)?;
 
     Ok(GenAccessorsItem {
       attrs,
@@ -95,7 +93,7 @@ impl Parse for GenAccessorsItem {
 // TODO: format_tokens macro??
 
 struct ItemGenAccessors {
-  items: Vec<GenAccessorsItem>,
+  pub items: Vec<GenAccessorsItem>,
 }
 
 impl Parse for ItemGenAccessors {

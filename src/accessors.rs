@@ -15,29 +15,6 @@ use ::syn::punctuated::Punctuated;
 use ::syn::spanned::Spanned;
 use ::syn::token::{Brace, Bracket};
 
-#[derive(Debug)]
-pub struct AccessorsExpr {
-  pub attrs: Vec<GenAccessorsAttr>,
-  pub expr: Box<Expr>,
-  pub colon_token: Colon,
-  pub ty: Box<Type>,
-}
-
-impl Parse for AccessorsExpr {
-  fn parse(input: ParseStream) -> Result<Self, syn::Error>  {
-    let mut attrs = Vec::new();
-    while input.peek(Token![#]) {
-      attrs.push(input.parse()?);
-    }
-    let expr_type = input.parse::<ExprType>()?;
-    let expr = expr_type.expr;
-    let colon_token = expr_type.colon_token;
-    let ty = expr_type.ty;
-
-    Ok(AccessorsExpr { attrs, expr, colon_token, ty, })
-  }
-}
-
 #[derive(Debug, Clone)]
 pub enum AccessorIdent {
   Get { span: Span, },
@@ -74,7 +51,8 @@ impl Parse for AccessorIdent {
       "set"       => Ok(Self::Set { span: ident.span() }),
       "chain_set" => Ok(Self::ChainSet { span: ident.span() }),
       "replace"   => Ok(Self::Replace { span: ident.span() }),
-      _ => Err(syn::Error::new(input.span(), "unrecognized ident")),
+      _ => Err(syn::Error::new(ident.span(), 
+        format!("identifier `{ident}` not recognized as an accessor type", ))),
     };
   }
 }
@@ -97,5 +75,31 @@ impl Parse for Accessor {
       unsafety: input.parse().ok(),
       ty: input.parse()?
     })
+  }
+}
+
+// TODO: potential proc macro work?
+#[derive(Default, Debug, Clone)]
+pub struct ForEachAccessorIdent<T> {
+  pub get: T,
+  pub get_mut: T,
+  pub get_copy: T,
+  pub take: T,
+  pub set: T,
+  pub chain_set: T,
+  pub replace: T,
+}
+
+impl<T: Clone> ForEachAccessorIdent<T> {
+  pub fn new_with(value: T) -> Self {
+    Self {
+      get: value.clone(),
+      get_mut: value.clone(),
+      get_copy: value.clone(),
+      take: value.clone(),
+      set: value.clone(),
+      chain_set: value.clone(),
+      replace: value.clone(),
+    }
   }
 }
