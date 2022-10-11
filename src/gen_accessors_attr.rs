@@ -20,6 +20,7 @@ use crate::ForEachAccessorIdent;
 #[derive(Debug, Clone)]
 pub enum GenAccessorsAttrIdent {
   Name            { span: Span },
+  Attrs           { span: Span },
   GetSuffix       { span: Span },
   GetPostfix      { span: Span },
   GetMutSuffix    { span: Span },
@@ -40,6 +41,7 @@ impl Display for GenAccessorsAttrIdent {
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
     return match self {
       Self::Name { .. }            => f.write_str("name"),
+      Self::Attrs { .. }           => f.write_str("attrs"),
       Self::GetSuffix { .. }       => f.write_str("get_suffix"),
       Self::GetPostfix { .. }      => f.write_str("get_postfix"),
       Self::GetMutSuffix { .. }    => f.write_str("get_mut_suffix"),
@@ -63,6 +65,7 @@ impl Parse for GenAccessorsAttrIdent {
     let ident = Ident::parse(input)?;
     return match ident.to_string().as_str() {
       "name"              => Ok(Self::Name { span: ident.span() }),
+      "attrs"             => Ok(Self::Attrs { span: ident.span() }),
       "get_suffix"        => Ok(Self::GetSuffix { span: ident.span() }),
       "get_postfix"       => Ok(Self::GetPostfix { span: ident.span() }),
       "get_mut_suffix"    => Ok(Self::GetMutSuffix { span: ident.span() }),
@@ -115,26 +118,27 @@ impl Parse for GenAccessorsAttr {
 }
 
 impl GenAccessorsAttr {
-  pub(crate) fn unpack_into(&self, name: &mut TokenStream, 
+  pub(crate) fn unpack_into(&self, name: &mut TokenStream, attrs: &mut TokenStream,
     suffixes: &mut ForEachAccessorIdent<TokenStream>, 
     postfixes: &mut ForEachAccessorIdent<TokenStream>)
   {
     match &self.ident {
-      GenAccessorsAttrIdent::Name { .. } => *name = self.arg.clone(),
-      GenAccessorsAttrIdent::GetSuffix { .. } => suffixes.get = self.arg.clone(),
-      GenAccessorsAttrIdent::GetPostfix { .. } => postfixes.get = self.arg.clone(),
-      GenAccessorsAttrIdent::GetMutSuffix { .. } => suffixes.get_mut = self.arg.clone(),
-      GenAccessorsAttrIdent::GetMutPostfix { .. } => postfixes.get_mut = self.arg.clone(),
-      GenAccessorsAttrIdent::GetCopySuffix { .. } => suffixes.get_copy = self.arg.clone(),
-      GenAccessorsAttrIdent::GetCopyPostfix { .. } => postfixes.get_copy = self.arg.clone(),
-      GenAccessorsAttrIdent::TakeSuffix { .. } => suffixes.take = self.arg.clone(),
-      GenAccessorsAttrIdent::TakePostfix { .. } => postfixes.take = self.arg.clone(),
-      GenAccessorsAttrIdent::SetSuffix { .. } => suffixes.set = self.arg.clone(),
-      GenAccessorsAttrIdent::SetPostfix { .. } => postfixes.set = self.arg.clone(),
-      GenAccessorsAttrIdent::ChainSetSuffix { .. } => suffixes.chain_set = self.arg.clone(),
+      GenAccessorsAttrIdent::Name            { .. } => *name = self.arg.clone(),
+      GenAccessorsAttrIdent::Attrs           { .. } => *attrs = self.arg.clone(),
+      GenAccessorsAttrIdent::GetSuffix       { .. } => suffixes.get = self.arg.clone(),
+      GenAccessorsAttrIdent::GetPostfix      { .. } => postfixes.get = self.arg.clone(),
+      GenAccessorsAttrIdent::GetMutSuffix    { .. } => suffixes.get_mut = self.arg.clone(),
+      GenAccessorsAttrIdent::GetMutPostfix   { .. } => postfixes.get_mut = self.arg.clone(),
+      GenAccessorsAttrIdent::GetCopySuffix   { .. } => suffixes.get_copy = self.arg.clone(),
+      GenAccessorsAttrIdent::GetCopyPostfix  { .. } => postfixes.get_copy = self.arg.clone(),
+      GenAccessorsAttrIdent::TakeSuffix      { .. } => suffixes.take = self.arg.clone(),
+      GenAccessorsAttrIdent::TakePostfix     { .. } => postfixes.take = self.arg.clone(),
+      GenAccessorsAttrIdent::SetSuffix       { .. } => suffixes.set = self.arg.clone(),
+      GenAccessorsAttrIdent::SetPostfix      { .. } => postfixes.set = self.arg.clone(),
+      GenAccessorsAttrIdent::ChainSetSuffix  { .. } => suffixes.chain_set = self.arg.clone(),
       GenAccessorsAttrIdent::ChainSetPostfix { .. } => postfixes.chain_set = self.arg.clone(),
-      GenAccessorsAttrIdent::ReplaceSuffix { .. } => suffixes.replace = self.arg.clone(),
-      GenAccessorsAttrIdent::ReplacePostfix { .. } => postfixes.replace = self.arg.clone(),
+      GenAccessorsAttrIdent::ReplaceSuffix   { .. } => suffixes.replace = self.arg.clone(),
+      GenAccessorsAttrIdent::ReplacePostfix  { .. } => postfixes.replace = self.arg.clone(),
     }
   }
 }

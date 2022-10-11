@@ -17,6 +17,32 @@ use ::syn::punctuated::Punctuated;
 use ::syn::spanned::Spanned;
 use ::syn::token::{Brace, Bracket};
 
+// TODO: potential proc macro work?
+#[derive(Default, Debug, Clone)]
+struct ForEachAccessorIdent<T> {
+  pub get: T,
+  pub get_mut: T,
+  pub get_copy: T,
+  pub take: T,
+  pub set: T,
+  pub chain_set: T,
+  pub replace: T,
+}
+
+impl<T: Clone> ForEachAccessorIdent<T> {
+  pub fn new_with(value: T) -> Self {
+    Self {
+      get: value.clone(),
+      get_mut: value.clone(),
+      get_copy: value.clone(),
+      take: value.clone(),
+      set: value.clone(),
+      chain_set: value.clone(),
+      replace: value.clone(),
+    }
+  }
+}
+
 #[derive(Debug)]
 struct GenAccessorsItem {
   attrs: Vec<GenAccessorsAttr>,
@@ -65,32 +91,6 @@ impl Parse for GenAccessorsItem {
   }
 }
 
-// TODO: potential proc macro work?
-#[derive(Default, Debug, Clone)]
-struct ForEachAccessorIdent<T> {
-  pub get: T,
-  pub get_mut: T,
-  pub get_copy: T,
-  pub take: T,
-  pub set: T,
-  pub chain_set: T,
-  pub replace: T,
-}
-
-impl<T: Clone> ForEachAccessorIdent<T> {
-  pub fn new_with(value: T) -> Self {
-    Self {
-      get: value.clone(),
-      get_mut: value.clone(),
-      get_copy: value.clone(),
-      take: value.clone(),
-      set: value.clone(),
-      chain_set: value.clone(),
-      replace: value.clone(),
-    }
-  }
-}
-
 // TODO: format_tokens macro??
 
 struct ItemGenAccessors {
@@ -126,20 +126,22 @@ pub fn generate_accessors(tokens: proc_macro::TokenStream) -> proc_macro::TokenS
   };
 
   for item in input.items {
-    let mut name = TokenStream::new();
+    let mut member_name = TokenStream::new();
+    let mut method_attrs = TokenStream::new();
     let mut suffixes = def_suffixes.clone();
     let mut postfixes = def_postfixes.clone();
     for attr in &item.attrs {
-      attr.unpack_into(&mut name, &mut suffixes, &mut postfixes);
+      attr.unpack_into(&mut member_name, &mut method_attrs, &mut suffixes, &mut postfixes);
     }
 
     for accessor in item.accessors.iter() {
       for expr in item.exprs.iter() {
-        let mut name = name.clone();
+        let mut name = member_name.clone();
+        let mut method_attrs = method_attrs.clone();
         let mut suffixes = suffixes.clone();
         let mut postfixes = postfixes.clone();
         for attr in &expr.attrs {
-          attr.unpack_into(&mut name, &mut suffixes, &mut postfixes);
+          attr.unpack_into(&mut name, &mut method_attrs, &mut suffixes, &mut postfixes);
         }
 
         let name = if name.is_empty() {
@@ -242,6 +244,7 @@ pub fn generate_accessors(tokens: proc_macro::TokenStream) -> proc_macro::TokenS
         };
 
         output.extend(quote!(
+          #method_attrs
           #method_modifiers fn #method_ident (#method_args) -> #method_ret_ty {
             #method_expr
           }
