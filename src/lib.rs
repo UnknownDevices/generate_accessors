@@ -222,10 +222,10 @@ pub fn generate_accessors(tokens: proc_macro::TokenStream) -> proc_macro::TokenS
               suffixes.get.to_string(), member_name.to_string(),
               postfixes.get.to_string()).as_str()).unwrap();            
             method_args = method_receiver.unwrap_or_else(|| quote!(&mut self));
-            method_ret_ty = quote!(&mut #expr_ty);
+            method_ret_ty = quote!(&#expr_ty);
             method_expr = if do_into_cast { 
-              quote!(&#expr_expr) 
-            } else { quote!((&#expr_expr).into()) };
+              quote!((&#expr_expr).into()) 
+            } else { quote!(&#expr_expr) };
           },
           AccessorIdent::GetMut { .. } => {
             method_ident = TokenStream::from_str(format!("{}{}{}", 
