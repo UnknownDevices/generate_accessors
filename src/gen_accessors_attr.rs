@@ -39,31 +39,6 @@ pub enum GenAccessorsAttrIdent {
   ReplacePostfix  { span: Span },
 }
 
-impl Display for GenAccessorsAttrIdent {
-  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    return match self {
-      Self::Name { .. }            => f.write_str("name"),
-      Self::Receiver { .. }        => f.write_str("receiver"),
-      Self::Into { .. }            => f.write_str("into"),
-      Self::Attrs { .. }           => f.write_str("attrs"),
-      Self::GetSuffix { .. }       => f.write_str("get_suffix"),
-      Self::GetPostfix { .. }      => f.write_str("get_postfix"),
-      Self::GetMutSuffix { .. }    => f.write_str("get_mut_suffix"),
-      Self::GetMutPostfix { .. }   => f.write_str("get_mut_postfix"),
-      Self::GetCopySuffix { .. }   => f.write_str("get_copy_suffix"),
-      Self::GetCopyPostfix { .. }  => f.write_str("get_copy_postfix"),
-      Self::TakeSuffix { .. }      => f.write_str("take_suffix"),
-      Self::TakePostfix { .. }     => f.write_str("take_postfix"),
-      Self::SetSuffix { .. }       => f.write_str("set_suffix"),
-      Self::SetPostfix { .. }      => f.write_str("set_postfix"),
-      Self::ChainSetSuffix { .. }  => f.write_str("chain_set_suffix"),
-      Self::ChainSetPostfix { .. } => f.write_str("chain_set_postfix"),
-      Self::ReplaceSuffix { .. }   => f.write_str("replace_suffix"),
-      Self::ReplacePostfix { .. }  => f.write_str("replace_postfix"),
-    }
-  }
-}
-
 impl Parse for GenAccessorsAttrIdent {
   fn parse(input: ParseStream) -> Result<Self, syn::Error> {
     let ident = Ident::parse(input)?;

@@ -26,20 +26,6 @@ pub enum AccessorIdent {
   Replace { span: Span, },
 }
 
-impl Display for AccessorIdent {
-  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    return match self {
-      Self::Get { .. }      => f.write_str("get"),
-      Self::GetMut { .. }   => f.write_str("get_mut"),
-      Self::GetCopy { .. }  => f.write_str("get_copy"),
-      Self::Take { .. }     => f.write_str("take"),
-      Self::Set { .. }      => f.write_str("set"),
-      Self::ChainSet { .. } => f.write_str("chain_set"),
-      Self::Replace { .. }  => f.write_str("replace"),
-    }
-  }
-}
-
 impl Parse for AccessorIdent {
   fn parse(input: ParseStream) -> Result<Self, syn::Error> {
     let ident = Ident::parse(input)?;
@@ -91,7 +77,7 @@ pub struct ForEachAccessorIdent<T> {
 }
 
 impl<T: Clone> ForEachAccessorIdent<T> {
-  pub fn new_with(value: T) -> Self {
+  pub fn new_repeat(value: T) -> Self {
     Self {
       get: value.clone(),
       get_mut: value.clone(),

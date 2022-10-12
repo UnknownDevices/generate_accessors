@@ -149,34 +149,32 @@ fn deduce_member_name(expr: &Expr) -> TokenStream {
   }
 }
 
-// first get all overrides then deduce if not overriden at all
-// struct AttrOverrides or GenAccessorsAttr to tuple enum
 #[proc_macro]
 pub fn generate_accessors(tokens: proc_macro::TokenStream) -> proc_macro::TokenStream {
   let input = parse_macro_input!(tokens as ItemGenAccessors);
   let mut output = TokenStream::new();
 
-  let def_suffixes: ForEachAccessorIdent<TokenStream> = ForEachAccessorIdent{ 
+  let default_suffixes: ForEachAccessorIdent<TokenStream> = ForEachAccessorIdent{ 
     take: TokenStream::from_str("take_").unwrap(),
     set: TokenStream::from_str("set_").unwrap(),
     chain_set: TokenStream::from_str("set_").unwrap(),
     replace: TokenStream::from_str("replace_").unwrap(),
-    ..ForEachAccessorIdent::new_with(TokenStream::new())
+    ..ForEachAccessorIdent::new_repeat(TokenStream::new())
   };
-  let def_postfixes: ForEachAccessorIdent<TokenStream> = ForEachAccessorIdent{ 
+  let default_postfixes: ForEachAccessorIdent<TokenStream> = ForEachAccessorIdent{ 
     get_mut: TokenStream::from_str("_mut").unwrap(),
-    ..ForEachAccessorIdent::new_with(TokenStream::new())
+    ..ForEachAccessorIdent::new_repeat(TokenStream::new())
   };
 
   for item in input.items {
     let mut member_name = Option::<TokenStream>::None;
     let mut method_receiver = Option::<TokenStream>::None;
-    let mut from_cast = Option::<TokenStream>::None;
+    let mut into_cast = Option::<TokenStream>::None;
     let mut method_attrs = TokenStream::new();
-    let mut suffixes = def_suffixes.clone();
-    let mut postfixes = def_postfixes.clone();
+    let mut suffixes = default_suffixes.clone();
+    let mut postfixes = default_postfixes.clone();
     for attr in &item.attrs {
-      attr.unpack_into(&mut member_name, &mut method_receiver, &mut from_cast,
+      attr.unpack_into(&mut member_name, &mut method_receiver, &mut into_cast,
         &mut method_attrs, &mut suffixes, &mut postfixes);
     }
 
@@ -184,7 +182,7 @@ pub fn generate_accessors(tokens: proc_macro::TokenStream) -> proc_macro::TokenS
       for expr in item.exprs.iter() {
         let mut member_name = member_name.clone();
         let mut method_receiver = method_receiver.clone();
-        let mut into_cast = from_cast.clone();
+        let mut into_cast = into_cast.clone();
         let mut method_attrs = method_attrs.clone();
         let mut suffixes = suffixes.clone();
         let mut postfixes = postfixes.clone();
@@ -308,7 +306,7 @@ pub fn generate_accessors(tokens: proc_macro::TokenStream) -> proc_macro::TokenS
             };
           },
         };
-        
+
         output.extend(quote!(
           #method_attrs
           #method_modifiers fn #method_ident (#method_args) -> #method_ret_ty {
