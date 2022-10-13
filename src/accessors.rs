@@ -63,29 +63,3 @@ impl Parse for Accessor {
     })
   }
 }
-
-// TODO: potential proc macro work?
-#[derive(Default, Debug, Clone)]
-pub struct ForEachAccessorIdent<T> {
-  pub get: T,
-  pub get_mut: T,
-  pub get_copy: T,
-  pub take: T,
-  pub set: T,
-  pub chain_set: T,
-  pub replace: T,
-}
-
-impl<T: Clone> ForEachAccessorIdent<T> {
-  pub fn new_repeat(value: T) -> Self {
-    Self {
-      get: value.clone(),
-      get_mut: value.clone(),
-      get_copy: value.clone(),
-      take: value.clone(),
-      set: value.clone(),
-      chain_set: value.clone(),
-      replace: value.clone(),
-    }
-  }
-}

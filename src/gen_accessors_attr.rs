@@ -15,13 +15,10 @@ use ::syn::punctuated::Punctuated;
 use ::syn::spanned::Spanned;
 use ::syn::token::{Brace, Bracket};
 
-use crate::ForEachAccessorIdent;
-
 #[derive(Debug, Clone)]
 pub enum GenAccessorsAttrIdent {
   Name            { span: Span },
   Receiver        { span: Span },
-  Into            { span: Span },
   Attrs           { span: Span },
   GetSuffix       { span: Span },
   GetPostfix      { span: Span },
@@ -45,7 +42,6 @@ impl Parse for GenAccessorsAttrIdent {
     return match ident.to_string().as_str() {
       "name"              => Ok(Self::Name { span: ident.span() }),
       "receiver"          => Ok(Self::Receiver { span: ident.span() }),
-      "into"              => Ok(Self::Into { span: ident.span() }),
       "attrs"             => Ok(Self::Attrs { span: ident.span() }),
       "get_suffix"        => Ok(Self::GetSuffix { span: ident.span() }),
       "get_postfix"       => Ok(Self::GetPostfix { span: ident.span() }),
@@ -96,32 +92,69 @@ impl Parse for GenAccessorsAttr {
   }
 }
 
-impl GenAccessorsAttr {
-  pub(crate) fn unpack_into(&self, name: &mut Option<TokenStream>, 
-    receiver: &mut Option<TokenStream>, into_cast: &mut Option<TokenStream>, 
-    attrs: &mut TokenStream, 
-    suffixes: &mut ForEachAccessorIdent<TokenStream>, 
-    postfixes: &mut ForEachAccessorIdent<TokenStream>)
-  {
-    match &self.ident {
-      GenAccessorsAttrIdent::Name            { .. } => *name = Some(self.arg.clone()),
-      GenAccessorsAttrIdent::Receiver        { .. } => *receiver = Some(self.arg.clone()),
-      GenAccessorsAttrIdent::Into            { .. } => *into_cast = Some(self.arg.clone()),
-      GenAccessorsAttrIdent::Attrs           { .. } => *attrs = self.arg.clone(),
-      GenAccessorsAttrIdent::GetSuffix       { .. } => suffixes.get = self.arg.clone(),
-      GenAccessorsAttrIdent::GetPostfix      { .. } => postfixes.get = self.arg.clone(),
-      GenAccessorsAttrIdent::GetMutSuffix    { .. } => suffixes.get_mut = self.arg.clone(),
-      GenAccessorsAttrIdent::GetMutPostfix   { .. } => postfixes.get_mut = self.arg.clone(),
-      GenAccessorsAttrIdent::GetCopySuffix   { .. } => suffixes.get_copy = self.arg.clone(),
-      GenAccessorsAttrIdent::GetCopyPostfix  { .. } => postfixes.get_copy = self.arg.clone(),
-      GenAccessorsAttrIdent::TakeSuffix      { .. } => suffixes.take = self.arg.clone(),
-      GenAccessorsAttrIdent::TakePostfix     { .. } => postfixes.take = self.arg.clone(),
-      GenAccessorsAttrIdent::SetSuffix       { .. } => suffixes.set = self.arg.clone(),
-      GenAccessorsAttrIdent::SetPostfix      { .. } => postfixes.set = self.arg.clone(),
-      GenAccessorsAttrIdent::ChainSetSuffix  { .. } => suffixes.chain_set = self.arg.clone(),
-      GenAccessorsAttrIdent::ChainSetPostfix { .. } => postfixes.chain_set = self.arg.clone(),
-      GenAccessorsAttrIdent::ReplaceSuffix   { .. } => suffixes.replace = self.arg.clone(),
-      GenAccessorsAttrIdent::ReplacePostfix  { .. } => postfixes.replace = self.arg.clone(),
+#[derive(Clone)]
+pub struct ProcessedGenAccessorsAttrs<'a> {
+  pub name: Option<&'a TokenStream>,
+  pub receiver: Option<&'a TokenStream>,
+  pub attrs: &'a TokenStream,
+  pub get_suf: &'a TokenStream,
+  pub get_post: &'a TokenStream,
+  pub get_mut_suf: &'a TokenStream,
+  pub get_mut_post: &'a TokenStream,
+  pub get_copy_suf: &'a TokenStream,
+  pub get_copy_post: &'a TokenStream,
+  pub take_suf: &'a TokenStream,
+  pub take_post: &'a TokenStream,
+  pub set_suf: &'a TokenStream,
+  pub set_post: &'a TokenStream,
+  pub chain_set_suf: &'a TokenStream,
+  pub chain_set_post: &'a TokenStream,
+  pub replace_suf: &'a TokenStream,
+  pub replace_post: &'a TokenStream,
+}
+
+impl<'a> ProcessedGenAccessorsAttrs<'a> {
+  pub fn new(empty_token_stream: &'a TokenStream) -> Self {
+    Self {
+      name: None,
+      receiver: None,
+      attrs: empty_token_stream,
+      get_suf: empty_token_stream,
+      get_post: empty_token_stream,
+      get_mut_suf: empty_token_stream,
+      get_mut_post: empty_token_stream,
+      get_copy_suf: empty_token_stream,
+      get_copy_post: empty_token_stream,
+      take_suf: empty_token_stream,
+      take_post: empty_token_stream,
+      set_suf: empty_token_stream,
+      set_post: empty_token_stream,
+      chain_set_suf: empty_token_stream,
+      chain_set_post: empty_token_stream,
+      replace_suf: empty_token_stream,
+      replace_post: empty_token_stream,
+    }
+  }
+
+  pub fn process(&mut self, attr: &'a GenAccessorsAttr) {
+    match &attr.ident {
+      GenAccessorsAttrIdent::Name            { .. } => self.name = Some(&attr.arg),
+      GenAccessorsAttrIdent::Receiver        { .. } => self.receiver = Some(&attr.arg),
+      GenAccessorsAttrIdent::Attrs           { .. } => self.attrs = &attr.arg,
+      GenAccessorsAttrIdent::GetSuffix       { .. } => self.get_suf = &attr.arg,
+      GenAccessorsAttrIdent::GetPostfix      { .. } => self.get_post = &attr.arg,
+      GenAccessorsAttrIdent::GetMutSuffix    { .. } => self.get_mut_suf = &attr.arg,
+      GenAccessorsAttrIdent::GetMutPostfix   { .. } => self.get_mut_post = &attr.arg,
+      GenAccessorsAttrIdent::GetCopySuffix   { .. } => self.get_copy_suf = &attr.arg,
+      GenAccessorsAttrIdent::GetCopyPostfix  { .. } => self.get_copy_post = &attr.arg,
+      GenAccessorsAttrIdent::TakeSuffix      { .. } => self.take_suf = &attr.arg,
+      GenAccessorsAttrIdent::TakePostfix     { .. } => self.take_post = &attr.arg,
+      GenAccessorsAttrIdent::SetSuffix       { .. } => self.set_suf = &attr.arg,
+      GenAccessorsAttrIdent::SetPostfix      { .. } => self.set_post = &attr.arg,
+      GenAccessorsAttrIdent::ChainSetSuffix  { .. } => self.chain_set_suf = &attr.arg,
+      GenAccessorsAttrIdent::ChainSetPostfix { .. } => self.chain_set_post = &attr.arg,
+      GenAccessorsAttrIdent::ReplaceSuffix   { .. } => self.replace_suf = &attr.arg,
+      GenAccessorsAttrIdent::ReplacePostfix  { .. } => self.replace_post = &attr.arg,
     }
   }
 }
