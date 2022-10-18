@@ -14,48 +14,6 @@ use syn::punctuated::Punctuated;
 use syn::token::{Colon, Brace, Bracket};
 use syn::{Type, parse_macro_input, bracketed, braced, Token, Expr, Member, Visibility, ExprType};
 
-fn deduce_expr_name(expr: &Expr) -> TokenStream {
-  return match expr.borrow() {
-    Expr::Field(expr_field) => {
-      match &expr_field.member {
-        Member::Named(member_named) => member_named.to_token_stream().into(),
-        Member::Unnamed(_) => panic!(),
-      }
-    },
-    Expr::Path(expr_path) => {
-      expr_path.path.segments.last().unwrap().ident.to_token_stream()
-    },
-    Expr::MethodCall(expr_method_call) => {
-      expr_method_call.method.to_token_stream()
-    },
-    Expr::Try(expr_try) => {
-      deduce_expr_name(expr_try.expr.borrow())
-    },
-    Expr::Call(expr_call) => {
-      deduce_expr_name(expr_call.func.borrow())
-    },
-    Expr::Unary(expr_unary) => {
-      deduce_expr_name(expr_unary.expr.borrow())
-    },
-    Expr::Cast(expr_cast) => {
-      deduce_expr_name(expr_cast.expr.borrow())
-    },
-    Expr::Reference(expr_reference) => {
-      deduce_expr_name(expr_reference.expr.borrow())
-    },
-    Expr::Box(expr_box) => {
-      deduce_expr_name(expr_box.expr.borrow())
-    },
-    Expr::Binary(expr_binary) => {
-      deduce_expr_name(expr_binary.left.borrow())
-    },
-    Expr::Paren(expr_paren) => {
-      deduce_expr_name(expr_paren.expr.borrow())
-    }
-    _ => panic!(),
-  }
-}
-
 #[derive(Debug)]
 struct GenAccessorsExpr {
   pub attrs: Vec<Attr>,
@@ -76,6 +34,54 @@ impl Parse for GenAccessorsExpr {
     let ty = expr_type.ty;
 
     Ok(GenAccessorsExpr { attrs, expr, colon_token, ty, })
+  }
+}
+
+impl GenAccessorsExpr {
+  fn deduce_name_intern(expr: &Expr) -> String {
+    return match expr.borrow() {
+      Expr::Field(expr_field) => {
+        match &expr_field.member {
+          Member::Named(member_named) => member_named.to_string(),
+          Member::Unnamed(_) => panic!(),
+        }
+      },
+      Expr::Path(expr_path) => {
+        expr_path.path.segments.last().unwrap().ident.to_string()
+      },
+      Expr::MethodCall(expr_method_call) => {
+        expr_method_call.method.to_string()
+      },
+      Expr::Try(expr_try) => {
+        Self::deduce_name_intern(expr_try.expr.borrow())
+      },
+      Expr::Call(expr_call) => {
+        Self::deduce_name_intern(expr_call.func.borrow())
+      },
+      Expr::Unary(expr_unary) => {
+        Self::deduce_name_intern(expr_unary.expr.borrow())
+      },
+      Expr::Cast(expr_cast) => {
+        Self::deduce_name_intern(expr_cast.expr.borrow())
+      },
+      Expr::Reference(expr_reference) => {
+        Self::deduce_name_intern(expr_reference.expr.borrow())
+      },
+      Expr::Box(expr_box) => {
+        Self::deduce_name_intern(expr_box.expr.borrow())
+      },
+      Expr::Binary(expr_binary) => {
+        Self::deduce_name_intern(expr_binary.left.borrow())
+      },
+      Expr::Paren(expr_paren) => {
+        Self::deduce_name_intern(expr_paren.expr.borrow())
+      }
+      _ => panic!(),
+    }
+  }
+
+  fn deduce_name(&self) -> String {
+     Self::deduce_name_intern(self.expr.borrow())
   }
 }
 
@@ -274,8 +280,8 @@ pub fn generate_accessors(tokens: proc_macro::TokenStream) -> proc_macro::TokenS
       for expr_index in 0..item.exprs.len() {
         let expr = &item.exprs[expr_index];
 
-        let member_name = args.name(expr_index).map_or_else(|| deduce_expr_name(&expr.expr),
-          |some| some.to_token_stream());
+        let member_name = args.name(expr_index).map_or_else(|| expr.deduce_name(),
+          |some| some.to_string());
 
         let method_modifiers = {
           let vis = match accessor.vis() {
@@ -296,8 +302,7 @@ pub fn generate_accessors(tokens: proc_macro::TokenStream) -> proc_macro::TokenS
         let expr_expr = expr.expr.to_token_stream();
         let method_attrs = args.attrs(expr_index);
         let method_ident = TokenStream::from_str(format!("{}{}{}",
-          args.suffix(expr_index, accessor_index),
-          member_name.to_string(),
+          args.suffix(expr_index, accessor_index), member_name,
           args.postfix(expr_index, accessor_index)).as_str()).unwrap();
         let method_args: TokenStream;
         let method_ret_ty: TokenStream;
