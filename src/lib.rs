@@ -175,10 +175,10 @@ impl<'a> ProcAttrs<'a> {
     self.0[expr_index][2]
   }
   fn suffix(&self, acessor_index: usize, expr_index: usize) -> &TokenStream {
-    &self.1[self.0.len() * acessor_index + expr_index][0]
+    &self.1[self.1.len() / self.0.len() * acessor_index + expr_index][0]
   }
-  fn postfix(&self, acessor_index: usize, expr_index: usize) -> &TokenStream {
-    &self.1[self.0.len() * acessor_index + expr_index][1]
+  fn postfix(&self, expr_index: usize, accessor_index: usize) -> &TokenStream {
+    &self.1[self.1.len() / self.0.len() * expr_index + accessor_index][1]
   }
 
   fn proc_attr(attr: &'a Attr, name: &mut Option<&'a TokenStream>, 
@@ -275,7 +275,133 @@ pub fn generate_accessors(tokens: proc_macro::TokenStream) -> proc_macro::TokenS
   let mut output = TokenStream::new();
 
   for item in input.items {
-    ProcAttrs::new(&item);
+    let args = ProcAttrs::new(&item);
+    
+    for accessor_index in 0..item.accessors.len() {
+      let accessor = &item.accessors[accessor_index];
+
+      for expr_index in 0..item.exprs.len() {
+        let expr = &item.exprs[expr_index];
+      
+        let member_name = args.name(expr_index).map_or_else(|| deduce_expr_name(&expr.expr), 
+          |some| some.to_token_stream());
+
+        let method_modifiers = {
+          let vis = match accessor.vis() {
+            Visibility::Inherited => item.accessors_vis.to_token_stream(),
+            _ => accessor.vis().to_token_stream(),
+          };
+          let constness = accessor.constness().map_or_else(|| item.accessors_constness.map_or(
+            TokenStream::new(), |some| some.into_token_stream()), |some| some.into_token_stream());
+          let asyncness = accessor.asyncness().map_or_else(|| item.accessors_asyncness.map_or(
+            TokenStream::new(), |some| some.into_token_stream()), |some| some.into_token_stream());
+          let unsafety = accessor.unsafety().map_or_else(|| item.accessors_unsafety.map_or(
+            TokenStream::new(), |some| some.into_token_stream()), |some| some.into_token_stream());
+
+          quote!(#vis #constness #asyncness #unsafety)
+        };
+
+        let expr_ty = expr.ty.to_token_stream();
+        let expr_expr = expr.expr.to_token_stream();
+        let method_attrs = &args.attrs(expr_index);
+        let method_ident: TokenStream;
+        let method_args: TokenStream;
+        let method_ret_ty: TokenStream;
+        let method_expr: TokenStream;
+        match accessor {
+          Accessor::Get { .. } => {
+            method_ident = TokenStream::from_str(format!("{}{}{}", 
+              args.suffix(expr_index, accessor_index).to_string(), 
+              member_name.to_string(),
+              args.postfix(expr_index, accessor_index).to_string()).as_str()).unwrap();            
+            method_args = args.receiver(expr_index).map_or_else(|| quote!(&self),
+              |some| some.clone());
+            method_ret_ty = quote!(&#expr_ty);
+            method_expr = quote!(&#expr_expr);
+          },
+          Accessor::GetMut { .. } => {
+            method_ident = TokenStream::from_str(format!("{}{}{}", 
+              args.suffix(expr_index, accessor_index).to_string(), 
+              member_name.to_string(),
+              args.postfix(expr_index, accessor_index).to_string()).as_str()).unwrap();           
+              method_args = args.receiver(expr_index).map_or_else(|| quote!(&mut self),
+                |some| some.clone());
+            method_ret_ty = quote!(&mut #expr_ty);
+            method_expr = quote!(&mut #expr_expr);
+          },
+          Accessor::GetCopy { .. } => {
+            method_ident = TokenStream::from_str(format!("{}{}{}", 
+              args.suffix(expr_index, accessor_index).to_string(), 
+              member_name.to_string(),
+              args.postfix(expr_index, accessor_index).to_string()).as_str()).unwrap();          
+              method_args = args.receiver(expr_index).map_or_else(|| quote!(&self),
+                |some| some.clone());
+            method_ret_ty = quote!(#expr_ty);
+            method_expr = quote!(#expr_expr.clone());
+          },
+          Accessor::Take { .. } => {
+            method_ident = TokenStream::from_str(format!("{}{}{}", 
+              args.suffix(expr_index, accessor_index).to_string(), 
+              member_name.to_string(),
+              args.postfix(expr_index, accessor_index).to_string()).as_str()).unwrap();            
+              method_args = args.receiver(expr_index).map_or_else(|| quote!(&mut self),
+                |some| some.clone());
+            method_ret_ty = quote!(#expr_ty);
+            method_expr = quote!(#expr_expr);
+          },
+          Accessor::Set { .. } => {
+            method_ident = TokenStream::from_str(format!("{}{}{}", 
+              args.suffix(expr_index, accessor_index).to_string(), 
+              member_name.to_string(),
+              args.postfix(expr_index, accessor_index).to_string()).as_str()).unwrap();  
+            method_args = args.receiver(expr_index).map_or_else(
+              || quote!(&mut self, value: #expr_ty), 
+              |some| if some.is_empty() { 
+                quote!(value: #expr_ty) 
+              } else { quote!(#some, value: #expr_ty)});
+            method_ret_ty = quote!(());
+            method_expr = quote!(#expr_expr = value;);
+          },
+          Accessor::ChainSet { .. } => {
+            method_ident = TokenStream::from_str(format!("{}{}{}", 
+              args.suffix(expr_index, accessor_index).to_string(), 
+              member_name.to_string(),
+              args.postfix(expr_index, accessor_index).to_string()).as_str()).unwrap();  
+            method_args = args.receiver(expr_index).map_or_else(
+              || quote!(&mut self, value: #expr_ty),
+              |some| if some.is_empty() { 
+                quote!(value: #expr_ty) 
+              } else { quote!(#some, value: #expr_ty)});
+            method_ret_ty = quote!(&mut Self);
+            method_expr = quote!(#expr_expr = value; self);
+          },
+          Accessor::Replace { .. } => {
+            method_ident = TokenStream::from_str(format!("{}{}{}", 
+              args.suffix(expr_index, accessor_index).to_string(), 
+              member_name.to_string(),
+              args.postfix(expr_index, accessor_index).to_string()).as_str()).unwrap();  
+            method_args = args.receiver(expr_index).map_or_else(
+              || quote!(&mut self, value: #expr_ty), 
+              |some| if some.is_empty() { 
+                quote!(value: #expr_ty) 
+              } else { quote!(#some, value: #expr_ty)} 
+            );
+            method_ret_ty = quote!(#expr_ty);
+            method_expr = quote!(
+              let output = #expr_expr;
+              #expr_expr = value ;
+              output );
+          },
+        };
+
+        output.extend(quote!(
+          #method_attrs
+          #method_modifiers fn #method_ident (#method_args) -> #method_ret_ty {
+            #method_expr
+          }
+        ).into_iter());
+      }
+    }
   }
 
   output.into()
