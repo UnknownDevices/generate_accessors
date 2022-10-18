@@ -181,21 +181,43 @@ impl<'a> ProcAttrs<'a> {
     &self.1[self.0.len() * acessor_index + expr_index][1]
   }
 
+  fn proc_attr(attr: &'a Attr, name: &mut Option<&'a TokenStream>, 
+    receiver: &mut Option<&'a TokenStream>, attrs: &mut Option<&'a TokenStream>, 
+    fixes: &mut Vec<[TokenStream; 2]>, item: &GenAccessorsItem, 
+    disc_of_fix_attrs_to_get: &Vec<[AttrDiscriminants; 2]>) 
+  {
+    match attr {
+      Attr::Name(attr_name) => *name = Some(attr_name.arg()),
+      Attr::Receiver(attr_receiver) => *receiver = Some(attr_receiver.arg()),
+      Attr::Attrs(attr_attrs) => *attrs = Some(attr_attrs.arg()),
+      _ => {
+        let attr_disc = AttrDiscriminants::from(attr);
+        for accessor_index in 0..item.accessors.len() {
+          if attr_disc == disc_of_fix_attrs_to_get[accessor_index][0] {
+            fixes[accessor_index][0] = attr.arg().clone();
+          } else if attr_disc == disc_of_fix_attrs_to_get[accessor_index][1] {
+            fixes[accessor_index][1] = attr.arg().clone();
+          }
+        }
+      },
+    }
+  }
+
   fn new(item: &'a GenAccessorsItem) -> Self {
     let mut output = Self {0: Vec::new(), 1: Vec::new() };
     let mut name = Option::<&'a TokenStream>::None;
     let mut receiver = Option::<&'a TokenStream>::None;
     let mut attrs = Option::<&'a TokenStream>::None;
     let mut fixes = Vec::<[TokenStream; 2]>::new();
-    let mut fix_attr_discrs_to_get = Vec::<[AttrDiscriminants; 2]>::new();
+    let mut disc_of_fix_attrs_to_get = Vec::<[AttrDiscriminants; 2]>::new();
 
     output.0.reserve_exact(item.exprs.len());
     output.1.reserve_exact(item.exprs.len() * item.accessors.len());
     fixes.reserve_exact(item.accessors.len());
-    fix_attr_discrs_to_get.reserve_exact(item.accessors.len());
+    disc_of_fix_attrs_to_get.reserve_exact(item.accessors.len());
 
     for accessor_index in 0..item.accessors.len() {
-      let (fixes_elem, fix_attr_discrs_to_get_elem) = 
+      let (fixes_elem, disc_of_fix_attrs_to_get_elem) = 
       match &item.accessors[accessor_index] {
         Accessor::Get(_) =>
           ([TokenStream::new(), TokenStream::new()],
@@ -221,25 +243,12 @@ impl<'a> ProcAttrs<'a> {
       };
 
       fixes.push(fixes_elem);
-      fix_attr_discrs_to_get.push(fix_attr_discrs_to_get_elem);
+      disc_of_fix_attrs_to_get.push(disc_of_fix_attrs_to_get_elem);
     }
 
     for attr in &item.attrs {
-      match attr {
-        Attr::Name(attr_name) => name = Some(attr_name.arg()),
-        Attr::Receiver(attr_receiver) => receiver = Some(attr_receiver.arg()),
-        Attr::Attrs(attr_attrs) => attrs = Some(attr_attrs.arg()),
-        _ => {
-          let attr_discr = AttrDiscriminants::from(attr);
-          for accessor_index in 0..item.accessors.len() {
-            if attr_discr == fix_attr_discrs_to_get[accessor_index][0] {
-              fixes[accessor_index][0] = attr.arg().clone();
-            } else if attr_discr == fix_attr_discrs_to_get[accessor_index][1] {
-              fixes[accessor_index][1] = attr.arg().clone();
-            }
-          }
-        },
-      }
+      Self::proc_attr(
+        attr, &mut name, &mut receiver, &mut attrs, &mut fixes, item, &disc_of_fix_attrs_to_get);
     }
 
     for expr in &item.exprs {
@@ -248,32 +257,17 @@ impl<'a> ProcAttrs<'a> {
       let mut attrs = attrs.clone();
       let mut fixes = fixes.clone();
       for attr in &expr.attrs {
-        match attr {
-          Attr::Name(attr_name) => name = Some(attr_name.arg()),
-          Attr::Receiver(attr_receiver) => receiver = Some(attr_receiver.arg()),
-          Attr::Attrs(attr_attrs) => attrs = Some(attr_attrs.arg()),
-          _ => {
-            let attr_discr = AttrDiscriminants::from(attr);
-            for accessor_index in 0..item.accessors.len() {
-              if attr_discr == fix_attr_discrs_to_get[accessor_index][0] {
-                fixes[accessor_index][0] = attr.arg().clone();
-              } else if attr_discr == fix_attr_discrs_to_get[accessor_index][1] {
-                fixes[accessor_index][1] = attr.arg().clone();
-              }
-            }
-          },
-        }
+        Self::proc_attr(
+          attr, &mut name, &mut receiver, &mut attrs, &mut fixes, item, &disc_of_fix_attrs_to_get);
       }
 
       output.0.push([name, receiver, attrs]);
       output.1.append(&mut fixes);
     }
 
-    println!("{output:#?}");
     output
   }
 }
-
 
 #[proc_macro]
 pub fn generate_accessors(tokens: proc_macro::TokenStream) -> proc_macro::TokenStream {
