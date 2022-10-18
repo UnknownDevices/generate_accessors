@@ -6,9 +6,9 @@ use syn::token::{Bracket, Paren};
 use syn::parse::{Parse, ParseStream, ParseBuffer};
 use syn::{Token, bracketed, parenthesized};
 
-macro_rules! impl_attr {
+macro_rules! impl_gen_accessors_attr {
   ($(($enum_var_ident:ident($struct_ident:ident), $ident_str:literal)),* $(,)*) => {
-    pub trait IsAttr: Debug + Clone + Parse {
+    pub trait IsGenAccessorsAttr: Debug + Clone + Parse {
       fn pound_token(&self) -> Token![#];
       fn bracket_token(&self) -> Bracket;
       fn ident(&self) -> Ident;
@@ -46,7 +46,7 @@ macro_rules! impl_attr {
       }
     }
 
-    impl IsAttr for $struct_ident {
+    impl IsGenAccessorsAttr for $struct_ident {
       fn pound_token(&self) -> Token![#] { self.pound_token.clone() }
       fn bracket_token(&self) -> Bracket { self.bracket_token.clone() }
       fn ident(&self) -> Ident           { Ident::new($ident_str, self.ident_span.clone()) }
@@ -56,13 +56,13 @@ macro_rules! impl_attr {
     )*
 
     #[derive(Debug, Clone, EnumDiscriminants)]
-    pub enum Attr {
+    pub enum GenAccessorsAttr {
       $(
       $enum_var_ident($struct_ident),
       )*
     }
 
-    impl Parse for Attr {
+    impl Parse for GenAccessorsAttr {
       fn parse(input: ParseStream) -> Result<Self, syn::Error> {
         let brackets_content: ParseBuffer;
         let paren_content: ParseBuffer;
@@ -86,7 +86,7 @@ macro_rules! impl_attr {
       }
     }
 
-    impl IsAttr for Attr {
+    impl IsGenAccessorsAttr for GenAccessorsAttr {
       delegate! {
         to match self {
           $(
@@ -104,22 +104,22 @@ macro_rules! impl_attr {
   };
 }
 
-impl_attr! {
-  (Name(AttrName), "name"),
-  (Receiver(AttrReceiver), "receiver"),
-  (Attrs(AttrAttrs), "attrs"),
-  (GetSuf(AttrGetSuf), "get_suffix"),
-  (GetPost(AttrGetPost), "get_postfix"),
-  (GetMutSuf(AttrGetMutSuf), "get_mut_suffix"),
-  (GetMutPost(AttrGetMutPost), "get_mut_postfix"),
-  (GetCopySuf(AttrGetCopySuf), "get_copy_suffix"),
-  (GetCopyPost(AttrGetCopyPost), "get_copy_postfix"),
-  (TakeSuf(AttrTakeSuf), "take_suffix"),
-  (TakePost(AttrTakePost), "take_postfix"),
-  (SetSuf(AttrSetSuf), "set_suffix"),
-  (SetPost(AttrSetPost), "set_postfix"),
-  (ChainSetSuf(AttrChainSetSuf), "chain_set_suffix"),
-  (ChainSetPost(AttrChainSetPost), "chain_set_postfix"),
-  (ReplaceSuf(AttrReplaceSuf), "replace_suffix"),
-  (ReplacePost(AttrReplacePost), "replace_postfix"),
+impl_gen_accessors_attr! {
+  (Name(GenAccessorsAttrName), "name"),
+  (Receiver(GenAccessorsAttrReceiver), "receiver"),
+  (Attrs(GenAccessorsAttrAttrs), "attrs"),
+  (GetSuf(GenAccessorsAttrGetSuf), "get_suffix"),
+  (GetPost(GenAccessorsAttrGetPost), "get_postfix"),
+  (GetMutSuf(GenAccessorsAttrGetMutSuf), "get_mut_suffix"),
+  (GetMutPost(GenAccessorsAttrGetMutPost), "get_mut_postfix"),
+  (GetCopySuf(GenAccessorsAttrGetCopySuf), "get_copy_suffix"),
+  (GetCopyPost(GenAccessorsAttrGetCopyPost), "get_copy_postfix"),
+  (TakeSuf(GenAccessorsAttrTakeSuf), "take_suffix"),
+  (TakePost(GenAccessorsAttrTakePost), "take_postfix"),
+  (SetSuf(GenAccessorsAttrSetSuf), "set_suffix"),
+  (SetPost(GenAccessorsAttrSetPost), "set_postfix"),
+  (ChainSetSuf(GenAccessorsAttrChainSetSuf), "chain_set_suffix"),
+  (ChainSetPost(GenAccessorsAttrChainSetPost), "chain_set_postfix"),
+  (ReplaceSuf(GenAccessorsAttrReplaceSuf), "replace_suffix"),
+  (ReplacePost(GenAccessorsAttrReplacePost), "replace_postfix"),
 }

@@ -1,8 +1,8 @@
 #![allow(unused)]
-mod attr;
+mod gen_accessors_attr;
 mod accessor;
 use accessor::*;
-use attr::*;
+use gen_accessors_attr::*;
 use syn::parse::ParseBuffer;
 use std::borrow::Borrow;
 use std::fmt::Debug;
@@ -16,7 +16,7 @@ use syn::{Type, parse_macro_input, bracketed, braced, Token, Expr, Member, Visib
 
 #[derive(Debug)]
 struct GenAccessorsExpr {
-  pub attrs: Vec<Attr>,
+  pub attrs: Vec<GenAccessorsAttr>,
   pub expr: Box<Expr>,
   pub colon_token: Colon,
   pub ty: Box<Type>,
@@ -39,7 +39,7 @@ impl Parse for GenAccessorsExpr {
 
 impl GenAccessorsExpr {
   fn deduce_name_intern(expr: &Expr) -> String {
-    return match expr.borrow() {
+    return match expr {
       Expr::Field(expr_field) => {
         match &expr_field.member {
           Member::Named(member_named) => member_named.to_string(),
@@ -87,7 +87,7 @@ impl GenAccessorsExpr {
 
 #[derive(Debug)]
 struct GenAccessorsItem {
-  pub attrs: Vec<Attr>,
+  pub attrs: Vec<GenAccessorsAttr>,
   pub accessors_vis: Visibility,
   pub accessors_constness: Option<Token![const]>,
   pub accessors_asyncness: Option<Token![async]>,
@@ -144,7 +144,7 @@ impl Parse for ItemGenAccessors {
       items.push(input.parse()?);
     }
 
-    Ok(ItemGenAccessors { items, })
+    Ok(ItemGenAccessors { items })
   }
 }
 
@@ -178,17 +178,17 @@ impl<'a> ProcAttrs<'a> {
     &self.1[self.1.len() / self.0.len() * expr_index + accessor_index][1]
   }
 
-  fn proc_attr(attr: &'a Attr, name: &mut Option<&'a TokenStream>,
+  fn proc_attr(attr: &'a GenAccessorsAttr, name: &mut Option<&'a TokenStream>,
     receiver: &mut Option<&'a TokenStream>, attrs: &mut Option<&'a TokenStream>,
     fixes: &mut Vec<[String; 2]>, item: &GenAccessorsItem,
-    disc_of_fix_attrs_to_get: &Vec<[AttrDiscriminants; 2]>)
+    disc_of_fix_attrs_to_get: &Vec<[GenAccessorsAttrDiscriminants; 2]>)
   {
     match attr {
-      Attr::Name(attr_name) => *name = Some(attr_name.arg()),
-      Attr::Receiver(attr_receiver) => *receiver = Some(attr_receiver.arg()),
-      Attr::Attrs(attr_attrs) => *attrs = Some(attr_attrs.arg()),
+      GenAccessorsAttr::Name(attr_name) => *name = Some(attr_name.arg()),
+      GenAccessorsAttr::Receiver(attr_receiver) => *receiver = Some(attr_receiver.arg()),
+      GenAccessorsAttr::Attrs(attr_attrs) => *attrs = Some(attr_attrs.arg()),
       _ => {
-        let attr_disc = AttrDiscriminants::from(attr);
+        let attr_disc = GenAccessorsAttrDiscriminants::from(attr);
         for accessor_index in 0..item.accessors.len() {
           if attr_disc == disc_of_fix_attrs_to_get[accessor_index][0] {
             fixes[accessor_index][0] = attr.arg().to_string();
@@ -206,7 +206,7 @@ impl<'a> ProcAttrs<'a> {
     let mut receiver = Option::<&'a TokenStream>::None;
     let mut attrs = Option::<&'a TokenStream>::None;
     let mut fixes = Vec::<[String; 2]>::new();
-    let mut disc_of_fix_attrs_to_get = Vec::<[AttrDiscriminants; 2]>::new();
+    let mut disc_of_fix_attrs_to_get = Vec::<[GenAccessorsAttrDiscriminants; 2]>::new();
 
     output.0.reserve_exact(item.exprs.len());
     output.1.reserve_exact(item.exprs.len() * item.accessors.len());
@@ -218,25 +218,26 @@ impl<'a> ProcAttrs<'a> {
       match &item.accessors[accessor_index] {
         Accessor::Get(_) =>
           ([String::new(), String::new()],
-          [AttrDiscriminants::GetSuf, AttrDiscriminants::GetPost]),
+          [GenAccessorsAttrDiscriminants::GetSuf, GenAccessorsAttrDiscriminants::GetPost]),
         Accessor::GetMut(_) =>
           ([String::new(), "_mut".to_string()],
-          [AttrDiscriminants::GetMutSuf, AttrDiscriminants::GetMutPost]),
+          [GenAccessorsAttrDiscriminants::GetMutSuf, GenAccessorsAttrDiscriminants::GetMutPost]),
         Accessor::GetCopy(_) =>
           ([String::new(), String::new()],
-          [AttrDiscriminants::GetCopySuf, AttrDiscriminants::GetCopyPost]),
+          [GenAccessorsAttrDiscriminants::GetCopySuf, GenAccessorsAttrDiscriminants::GetCopyPost]),
         Accessor::Take(_) =>
           (["take_".to_string(), String::new()],
-          [AttrDiscriminants::TakeSuf, AttrDiscriminants::TakePost]),
+          [GenAccessorsAttrDiscriminants::TakeSuf, GenAccessorsAttrDiscriminants::TakePost]),
         Accessor::Set(_) =>
           (["set_".to_string(), String::new()],
-            [AttrDiscriminants::SetSuf, AttrDiscriminants::SetPost]),
+            [GenAccessorsAttrDiscriminants::SetSuf, GenAccessorsAttrDiscriminants::SetPost]),
         Accessor::ChainSet(_) =>
           (["set_".to_string(), String::new()],
-            [AttrDiscriminants::ChainSetSuf, AttrDiscriminants::ChainSetPost]),
+            [GenAccessorsAttrDiscriminants::ChainSetSuf,
+            GenAccessorsAttrDiscriminants::ChainSetPost]),
         Accessor::Replace(_) =>
           (["replace_".to_string(), String::new()],
-          [AttrDiscriminants::ReplaceSuf, AttrDiscriminants::ReplacePost]),
+          [GenAccessorsAttrDiscriminants::ReplaceSuf, GenAccessorsAttrDiscriminants::ReplacePost]),
       };
 
       fixes.push(fixes_elem);
@@ -304,6 +305,7 @@ pub fn generate_accessors(tokens: proc_macro::TokenStream) -> proc_macro::TokenS
         let method_ident = TokenStream::from_str(format!("{}{}{}",
           args.suffix(expr_index, accessor_index), member_name,
           args.postfix(expr_index, accessor_index)).as_str()).unwrap();
+
         let method_args: TokenStream;
         let method_ret_ty: TokenStream;
         let method_expr: TokenStream;
@@ -316,19 +318,19 @@ pub fn generate_accessors(tokens: proc_macro::TokenStream) -> proc_macro::TokenS
           },
           Accessor::GetMut(_) => {
             method_args = args.receiver(expr_index).map_or_else(|| quote!(&mut self),
-                |some| some.clone());
+              |some| some.clone());
             method_ret_ty = quote!(&mut #expr_ty);
             method_expr = quote!(&mut #expr_expr);
           },
           Accessor::GetCopy(_) => {
             method_args = args.receiver(expr_index).map_or_else(|| quote!(&self),
-                |some| some.clone());
+              |some| some.clone());
             method_ret_ty = quote!(#expr_ty);
             method_expr = quote!(#expr_expr.clone());
           },
           Accessor::Take(_) => {
             method_args = args.receiver(expr_index).map_or_else(|| quote!(&mut self),
-                |some| some.clone());
+              |some| some.clone());
             method_ret_ty = quote!(#expr_ty);
             method_expr = quote!(#expr_expr);
           },
