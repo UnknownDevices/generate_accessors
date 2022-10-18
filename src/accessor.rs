@@ -16,14 +16,14 @@ macro_rules! impl_attr {
 
     $(
     #[derive(Debug, Clone)]
-    pub struct $struct_ident { 
+    pub struct $struct_ident {
       vis: Visibility,
       constness: Option<Token![const]>,
       asyncness: Option<Token![async]>,
       unsafety: Option<Token![unsafe]>,
       ident_span: Span,
     }
-    
+
     impl Parse for $struct_ident {
       fn parse(input: ParseStream) -> Result<Self, syn::Error> {
         let vis = input.parse()?;
@@ -48,13 +48,13 @@ macro_rules! impl_attr {
       fn ident(&self) -> Ident { Ident::new($ident_str, self.ident_span.clone()) }
     }
     )*
-    
+
     #[derive(Debug, Clone)]
     pub enum Accessor {
-      $( 
+      $(
       $enum_var_ident($struct_ident),
       )*
-    } 
+    }
 
     impl Parse for Accessor {
       fn parse(input: ParseStream) -> Result<Self, syn::Error> {
@@ -65,7 +65,7 @@ macro_rules! impl_attr {
         let ident = input.parse::<Ident>()?;
         let ident_span = ident.span();
 
-        return Ok( 
+        return Ok(
           match ident.to_string().as_str() {
             $(
             $ident_str => Self::$enum_var_ident(

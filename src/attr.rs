@@ -18,14 +18,14 @@ macro_rules! impl_attr {
 
     $(
     #[derive(Debug, Clone)]
-    pub struct $struct_ident { 
-      pound_token: Token![#], 
+    pub struct $struct_ident {
+      pound_token: Token![#],
       bracket_token: Bracket,
       ident_span: Span,
       paren_token: Paren,
-      arg: TokenStream, 
+      arg: TokenStream,
     }
-    
+
     impl Parse for $struct_ident {
       fn parse(input: ParseStream) -> Result<Self, syn::Error> {
         let brackets_content: ParseBuffer;
@@ -40,7 +40,7 @@ macro_rules! impl_attr {
         let paren_token = parenthesized!(paren_content in brackets_content);
         let arg = paren_content.parse::<TokenStream>()?;
 
-        Ok(Self { 
+        Ok(Self {
           pound_token, bracket_token, ident_span, paren_token, arg,
         })
       }
@@ -54,10 +54,10 @@ macro_rules! impl_attr {
       fn arg(&self) -> &TokenStream       { &self.arg }
     }
     )*
-    
+
     #[derive(Debug, Clone, EnumDiscriminants)]
     pub enum Attr {
-      $( 
+      $(
       $enum_var_ident($struct_ident),
       )*
     }
@@ -74,7 +74,7 @@ macro_rules! impl_attr {
         let paren_token = parenthesized!(paren_content in brackets_content);
         let arg = paren_content.parse::<TokenStream>()?;
 
-        return Ok( 
+        return Ok(
           match ident.to_string().as_str() {
             $(
             $ident_str => Self::$enum_var_ident(

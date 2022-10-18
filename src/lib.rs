@@ -151,18 +151,18 @@ impl ItemGenAccessors {
 #[derive(Debug, Clone)]
 struct ProcAttrs<'a>(
   // TODO: use tuples not arrays?
-  Vec<[Option<&'a TokenStream>; 3]>, 
-  Vec<[String; 2]>, 
+  Vec<[Option<&'a TokenStream>; 3]>,
+  Vec<[String; 2]>,
 );
 
 impl<'a> ProcAttrs<'a> {
-  fn name(&self, expr_index: usize) -> &Option<&'a TokenStream> { 
-    &self.0[expr_index][0] 
+  fn name(&self, expr_index: usize) -> &Option<&'a TokenStream> {
+    &self.0[expr_index][0]
   }
-  fn receiver(&self, expr_index: usize) -> &Option<&'a TokenStream> { 
-    &self.0[expr_index][1] 
+  fn receiver(&self, expr_index: usize) -> &Option<&'a TokenStream> {
+    &self.0[expr_index][1]
   }
-  fn attrs(&self, expr_index: usize) -> &Option<&'a TokenStream> { 
+  fn attrs(&self, expr_index: usize) -> &Option<&'a TokenStream> {
     &self.0[expr_index][2]
   }
   fn suffix(&self, acessor_index: usize, expr_index: usize) -> &String {
@@ -172,10 +172,10 @@ impl<'a> ProcAttrs<'a> {
     &self.1[self.1.len() / self.0.len() * expr_index + accessor_index][1]
   }
 
-  fn proc_attr(attr: &'a Attr, name: &mut Option<&'a TokenStream>, 
-    receiver: &mut Option<&'a TokenStream>, attrs: &mut Option<&'a TokenStream>, 
-    fixes: &mut Vec<[String; 2]>, item: &GenAccessorsItem, 
-    disc_of_fix_attrs_to_get: &Vec<[AttrDiscriminants; 2]>) 
+  fn proc_attr(attr: &'a Attr, name: &mut Option<&'a TokenStream>,
+    receiver: &mut Option<&'a TokenStream>, attrs: &mut Option<&'a TokenStream>,
+    fixes: &mut Vec<[String; 2]>, item: &GenAccessorsItem,
+    disc_of_fix_attrs_to_get: &Vec<[AttrDiscriminants; 2]>)
   {
     match attr {
       Attr::Name(attr_name) => *name = Some(attr_name.arg()),
@@ -208,7 +208,7 @@ impl<'a> ProcAttrs<'a> {
     disc_of_fix_attrs_to_get.reserve_exact(item.accessors.len());
 
     for accessor_index in 0..item.accessors.len() {
-      let (fixes_elem, disc_of_fix_attrs_to_get_elem) = 
+      let (fixes_elem, disc_of_fix_attrs_to_get_elem) =
       match &item.accessors[accessor_index] {
         Accessor::Get(_) =>
           ([String::new(), String::new()],
@@ -216,19 +216,19 @@ impl<'a> ProcAttrs<'a> {
         Accessor::GetMut(_) =>
           ([String::new(), "_mut".to_string()],
           [AttrDiscriminants::GetMutSuf, AttrDiscriminants::GetMutPost]),
-        Accessor::GetCopy(_) => 
+        Accessor::GetCopy(_) =>
           ([String::new(), String::new()],
           [AttrDiscriminants::GetCopySuf, AttrDiscriminants::GetCopyPost]),
-        Accessor::Take(_) => 
+        Accessor::Take(_) =>
           (["take_".to_string(), String::new()],
           [AttrDiscriminants::TakeSuf, AttrDiscriminants::TakePost]),
-        Accessor::Set(_) => 
+        Accessor::Set(_) =>
           (["set_".to_string(), String::new()],
             [AttrDiscriminants::SetSuf, AttrDiscriminants::SetPost]),
-        Accessor::ChainSet(_) => 
+        Accessor::ChainSet(_) =>
           (["set_".to_string(), String::new()],
             [AttrDiscriminants::ChainSetSuf, AttrDiscriminants::ChainSetPost]),
-        Accessor::Replace(_) => 
+        Accessor::Replace(_) =>
           (["replace_".to_string(), String::new()],
           [AttrDiscriminants::ReplaceSuf, AttrDiscriminants::ReplacePost]),
       };
@@ -267,14 +267,14 @@ pub fn generate_accessors(tokens: proc_macro::TokenStream) -> proc_macro::TokenS
 
   for item in input.items {
     let args = ProcAttrs::new(&item);
-    
+
     for accessor_index in 0..item.accessors.len() {
       let accessor = &item.accessors[accessor_index];
 
       for expr_index in 0..item.exprs.len() {
         let expr = &item.exprs[expr_index];
-      
-        let member_name = args.name(expr_index).map_or_else(|| deduce_expr_name(&expr.expr), 
+
+        let member_name = args.name(expr_index).map_or_else(|| deduce_expr_name(&expr.expr),
           |some| some.to_token_stream());
 
         let method_modifiers = {
@@ -295,10 +295,10 @@ pub fn generate_accessors(tokens: proc_macro::TokenStream) -> proc_macro::TokenS
         let expr_ty = expr.ty.to_token_stream();
         let expr_expr = expr.expr.to_token_stream();
         let method_attrs = args.attrs(expr_index);
-        let method_ident = TokenStream::from_str(format!("{}{}{}", 
-          args.suffix(expr_index, accessor_index), 
+        let method_ident = TokenStream::from_str(format!("{}{}{}",
+          args.suffix(expr_index, accessor_index),
           member_name.to_string(),
-          args.postfix(expr_index, accessor_index)).as_str()).unwrap();  
+          args.postfix(expr_index, accessor_index)).as_str()).unwrap();
         let method_args: TokenStream;
         let method_ret_ty: TokenStream;
         let method_expr: TokenStream;
@@ -329,9 +329,9 @@ pub fn generate_accessors(tokens: proc_macro::TokenStream) -> proc_macro::TokenS
           },
           Accessor::Set(_) => {
             method_args = args.receiver(expr_index).map_or_else(
-              || quote!(&mut self, value: #expr_ty), 
-              |some| if some.is_empty() { 
-                quote!(value: #expr_ty) 
+              || quote!(&mut self, value: #expr_ty),
+              |some| if some.is_empty() {
+                quote!(value: #expr_ty)
               } else { quote!(#some, value: #expr_ty)});
             method_ret_ty = quote!(());
             method_expr = quote!(#expr_expr = value;);
@@ -339,17 +339,17 @@ pub fn generate_accessors(tokens: proc_macro::TokenStream) -> proc_macro::TokenS
           Accessor::ChainSet(_) => {
             method_args = args.receiver(expr_index).map_or_else(
               || quote!(&mut self, value: #expr_ty),
-              |some| if some.is_empty() { 
-                quote!(value: #expr_ty) 
+              |some| if some.is_empty() {
+                quote!(value: #expr_ty)
               } else { quote!(#some, value: #expr_ty)});
             method_ret_ty = quote!(&mut Self);
             method_expr = quote!(#expr_expr = value; self);
           },
           Accessor::Replace(_) => {
             method_args = args.receiver(expr_index).map_or_else(
-              || quote!(&mut self, value: #expr_ty), 
-              |some| if some.is_empty() { 
-                quote!(value: #expr_ty) 
+              || quote!(&mut self, value: #expr_ty),
+              |some| if some.is_empty() {
+                quote!(value: #expr_ty)
               } else { quote!(#some, value: #expr_ty)});
             method_ret_ty = quote!(#expr_ty);
             method_expr = quote!(
